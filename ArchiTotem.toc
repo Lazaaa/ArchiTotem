@@ -2,7 +2,7 @@
 ## Title: ArchiTotem
 ## Notes: All totems on 4 barslots! Emberveil version
 ## Notes-ruRU: Все тотемы в 4 ячейках!
-## Version: 1.00
+## Version: 1.0
 ## Author: Kharon feat Nahoom of Dragonblight EU (2015 1.41 version)
 ## X-Credits: RoadBlock, Lichery - localizations
 ## SavedVariablesPerCharacter: ArchiTotem_TotemData, ArchiTotem_Options
