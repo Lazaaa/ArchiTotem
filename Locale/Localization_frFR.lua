@@ -70,6 +70,17 @@ L["Cast Earth Totem"] = "Cast Earth Totem"
 L["Cast Fire Totem"] = "Cast Fire Totem"
 L["Cast Water Totem"] = "Cast Water Totem"
 L["Cast Air Totem"] = "Cast Air Totem"
+
+L["ArchiTotem - Settings"] = "ArchiTotem - Paramètres"
+L["Reset Data"] = "Réinitialiser les données"
+L["Close"] = "Fermer"
+L["Settings are saved automatically"] = "Les paramètres sont enregistrés automatiquement"
+L["Popout direction"] = "Direction d'apparition"
+L["Show all on hover"] = "Tout afficher au survol"
+L["Move to bottom on cast"] = "Déplacer en bas lors de l'invocation"
+L["Show numeric cooldowns"] = "Afficher les cooldowns numériques"
+L["Show tooltips"] = "Afficher les infobulles"
+L["Scale"] = "Échelle"
 	
 BINDING_NAME_CAST_EARTH_TOTEM = L["Cast Earth Totem"]
 BINDING_NAME_CAST_FIRE_TOTEM = L["Cast Fire Totem"]
