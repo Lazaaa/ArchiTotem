@@ -71,6 +71,17 @@ L["Cast Fire Totem"] = "Установка тотема огня"
 L["Cast Water Totem"] = "Установка тотема воды"
 L["Cast Air Totem"] = "Установка тотема воздуха"
 
+L["ArchiTotem - Settings"] = "ArchiTotem - Настройки"
+L["Reset Data"] = "Сбросить данные"
+L["Close"] = "Закрыть"
+L["Settings are saved automatically"] = "Настройки сохраняются автоматически"
+L["Popout direction"] = "Направление всплытия"
+L["Show all on hover"] = "Показывать все при наведении"
+L["Move to bottom on cast"] = "Перемещать вниз при применении"
+L["Show numeric cooldowns"] = "Показывать числовые перезарядки"
+L["Show tooltips"] = "Показывать подсказки"
+L["Scale"] = "Масштаб"
+
 BINDING_NAME_CAST_EARTH_TOTEM = L["Cast Earth Totem"]
 BINDING_NAME_CAST_FIRE_TOTEM = L["Cast Fire Totem"]
 BINDING_NAME_CAST_WATER_TOTEM = L["Cast Water Totem"]
