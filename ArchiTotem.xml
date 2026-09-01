@@ -3,7 +3,7 @@ C:\Projects\WoW\Bin\Interface\FrameXML\UI.xsd">
 	<Script file="Localization.lua" />
 	<Script file="ArchiTotem.lua" />
 	
-	<Button name="ArchiTotem_ButtonTemplate" movable="true" virtual="true" inherits="ActionBarButtonTemplate">
+	<Button name="ArchiTotem_ButtonTemplate" movable="true" virtual="true">
 		<Size>
 			<AbsDimension x="40" y="40"/>
 		</Size>
@@ -37,8 +37,8 @@ C:\Projects\WoW\Bin\Interface\FrameXML\UI.xsd">
 			</OnUpdate>
 		</Scripts>
 		<Layers>
-			<Layer level="BACKGROUND">
-				<Texture name="$parentTexture"/>
+			<Layer level="ARTWORK">
+				<Texture name="$parentTexture" setallpoints="true"/>
 			</Layer>
 			<Layer level="ARTWORK">
 				<Texture name="$parentCooldownBg" file="Interface\Tooltips\UI-Tooltip-Background" hidden="true">
@@ -66,6 +66,12 @@ C:\Projects\WoW\Bin\Interface\FrameXML\UI.xsd">
 				</FontString>
 			</Layer>
 		</Layers>
+		<!-- EZT ADD HOZZÁ: -->
+		<Cooldown name="$parentCooldown" inherits="CooldownFrameTemplate">
+			<Anchors>
+				<Anchor point="CENTER" relativeTo="$parent" relativePoint="CENTER"/>
+			</Anchors>
+		</Cooldown>
 		<HighlightTexture alphaMode="ADD" file="Interface\Buttons\ButtonHilight-Square"/>
 	</Button>
 	
