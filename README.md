@@ -1,4 +1,4 @@
-# ArchiTotem (Emberveil Edition 1.12.1)
+# ArchiTotem (Emberveil Edition)
 Shaman addon to keep track of totems timers, area of effect and simplify the totem management.
 
 Based on https://github.com/Road-block/ArchiTotem, but with some heavy refactoring, code cleanup and QoL improvements focused on <a href="https://emberveil.org/">Emberveil WoW.</a>
