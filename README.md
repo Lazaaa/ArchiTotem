@@ -26,7 +26,17 @@ Based on https://github.com/Road-block/ArchiTotem, but with some heavy refactori
 
 # Commands
 You can use either /architotem or /at to run a command
-
+<code>
+/at set <earth/fire/water/air> #    Sets the totems shown of that element to #
+/at direction <up/down> - Set the direction totems pop up.
+/at order <element 1, element 2, element 3, element 4> - Sets the order of the totems, from left to right.
+/at scale # - Sets the scale of ArchiTotem, default is 1.
+/at showall - Toggles show all mode, displaying all totems on mouseover.
+/at bottomcast - Toggles moving totems to the bottom line when cast
+/at timers - Toggles showing timers
+/at tooltip - Toggles showing tooltips
+/at debug - Toggles debuging
+</code>
 
 Moving the bar:
 <ul>
@@ -39,4 +49,5 @@ Moving the bar:
 <ul>
 <li>The addon is displayed even if you have not learned a specific totem.</li>
 <li>There's no way to down-rank a totem launched by the addon.</li>
+<li>It does not save the position, it is not possible at the moment.</li>
 </ul>
