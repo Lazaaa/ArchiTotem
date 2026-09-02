@@ -226,7 +226,6 @@ function ArchiTotem_InitDefaults()
     end
 
     ArchiTotem_TotemData = {}
-
     for k, v in pairs(ArchiTotem_DefaultTotemData) do
         ArchiTotem_TotemData[k] = {
             icon = v.icon,
@@ -238,20 +237,60 @@ function ArchiTotem_InitDefaults()
         }
     end
 
-    if ArchiTotem_Options and ArchiTotem_Options["TotemOrder"] then
-        for k, v in pairs(ArchiTotem_Options["TotemOrder"]) do
-            if v and v.icon and v.name then
-                ArchiTotem_TotemData[k] = {
-                    icon = v.icon,
-                    name = v.name,
-                    duration = v.duration or 0,
-                    cooldown = v.cooldown or 0,
-                    cooldownstarted = nil,
-                    casted = nil,
-                }
+    if ArchiTotem_TotemData then
+        for _, element in ipairs(totemElements) do
+            local threeLetter = string.sub(element, 1, 3)
+            local maxShown = ArchiTotem_Options[threeLetter].shown
+            
+            for i = ArchiTotem_Options[threeLetter].max, 1, -1 do
+                local buttonName = "ArchiTotemButton_" .. element .. i
+                local totemData = ArchiTotem_TotemData[buttonName]
+                
+                if totemData then
+                    local spellName = L[totemData.name] or totemData.name
+                    local spellID = ArchiTotem_GetSpellId(spellName)
+                    
+                    if spellID == 0 then
+                        ArchiTotem_TotemData[buttonName] = nil
+                        if i <= maxShown then
+                            ArchiTotem_Options[threeLetter].shown = maxShown - 1
+                            maxShown = maxShown - 1
+                        end
+                    end
+                end
             end
         end
     end
+
+    for _, element in ipairs(totemElements) do
+        local threeLetter = string.sub(element, 1, 3)
+        local max = ArchiTotem_Options[threeLetter].max
+        
+        local tempList = {}
+        for i = 1, max do
+            local btnName = "ArchiTotemButton_" .. element .. i
+            if ArchiTotem_TotemData[btnName] then
+                table.insert(tempList, ArchiTotem_TotemData[btnName])
+            end
+        end
+        
+        for i = 1, max do
+            local btnName = "ArchiTotemButton_" .. element .. i
+            ArchiTotem_TotemData[btnName] = nil
+        end
+        
+        for i, data in ipairs(tempList) do
+            local btnName = "ArchiTotemButton_" .. element .. i
+            ArchiTotem_TotemData[btnName] = data
+        end
+        
+        local userShown = ArchiTotem_Options[threeLetter].shown
+        if #tempList > 0 then
+			ArchiTotem_Options[threeLetter].shown = math.max(1, math.min(userShown, #tempList))
+		else
+			ArchiTotem_Options[threeLetter].shown = 0
+		end
+	end
 end
 
 -- =====================================================
@@ -284,9 +323,9 @@ end
 
 function ArchiTotem_OnEvent(event)
     if event == "VARIABLES_LOADED" then
-        ArchiTotem_Options = nil
         ArchiTotem_InitDefaults()
 
+        -- Csak a pozíciót állítjuk középre, de a többi beállítást MEGTARTJUK!
         ArchiTotem_Options["Apperance"].position = {
             point = "CENTER",
             relativeTo = UIParent,
@@ -588,11 +627,17 @@ function ArchiTotem_UpdateShown()
     if not ArchiTotem_Options then return end
     for _, v in pairs(totemElements) do
         local threeLetterElement = string.sub(v, 1, 3)
-        for i = 1, ArchiTotem_Options[threeLetterElement].max do
-            if i <= ArchiTotem_Options[threeLetterElement].shown then
+        if ArchiTotem_Options["Apperance"].allonmouseover == true then
+            for i = 1, ArchiTotem_Options[threeLetterElement].max do
                 _G["ArchiTotemButton_" .. v .. i]:Show()
-            else
-                _G["ArchiTotemButton_" .. v .. i]:Hide()
+            end
+        else
+            for i = 1, ArchiTotem_Options[threeLetterElement].max do
+                if i <= ArchiTotem_Options[threeLetterElement].shown then
+                    _G["ArchiTotemButton_" .. v .. i]:Show()
+                else
+                    _G["ArchiTotemButton_" .. v .. i]:Hide()
+                end
             end
         end
     end
