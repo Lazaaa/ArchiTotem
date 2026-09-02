@@ -227,23 +227,29 @@ function ArchiTotem_InitDefaults()
 
     ArchiTotem_TotemData = {}
 
+    for k, v in pairs(ArchiTotem_DefaultTotemData) do
+        ArchiTotem_TotemData[k] = {
+            icon = v.icon,
+            name = v.name,
+            duration = v.duration,
+            cooldown = v.cooldown,
+            cooldownstarted = nil,
+            casted = nil,
+        }
+    end
+
     if ArchiTotem_Options and ArchiTotem_Options["TotemOrder"] then
         for k, v in pairs(ArchiTotem_Options["TotemOrder"]) do
-            ArchiTotem_TotemData[k] = v
-            ArchiTotem_TotemData[k].cooldownstarted = nil
-            ArchiTotem_TotemData[k].casted = nil
-        end
-    else
-
-        for k, v in pairs(ArchiTotem_DefaultTotemData) do
-            ArchiTotem_TotemData[k] = {
-                icon = v.icon,
-                name = v.name,
-                duration = v.duration,
-                cooldown = v.cooldown,
-                cooldownstarted = nil,
-                casted = nil,
-            }
+            if v and v.icon and v.name then
+                ArchiTotem_TotemData[k] = {
+                    icon = v.icon,
+                    name = v.name,
+                    duration = v.duration or 0,
+                    cooldown = v.cooldown or 0,
+                    cooldownstarted = nil,
+                    casted = nil,
+                }
+            end
         end
     end
 end
@@ -278,6 +284,7 @@ end
 
 function ArchiTotem_OnEvent(event)
     if event == "VARIABLES_LOADED" then
+        ArchiTotem_Options = nil
         ArchiTotem_InitDefaults()
 
         ArchiTotem_Options["Apperance"].position = {
