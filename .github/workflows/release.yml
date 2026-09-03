@@ -1,11 +1,12 @@
 name: Auto Build and Release
 
 on:
-  push:
-    branches: [ Architotem ]   # minden push-ra fut a főágon
+  # push:
+  #   branches: [ Architotem ]
+  workflow_dispatch:  
 
 permissions:
-  contents: write                # jogosultság a release és tag létrehozásához
+  contents: write 
 
 jobs:
   release:
