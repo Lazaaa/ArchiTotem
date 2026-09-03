@@ -12,7 +12,7 @@ Based on https://github.com/Road-block/ArchiTotem, but with some heavy refactori
 </ul>
 
 # Screenshots
-<b>Totem bar.</b><br>
+<b>Totem bar.</b><br> 
 <img width="245" height="83" alt="bar" src="https://github.com/user-attachments/assets/faed932e-4f77-4db2-9a2a-da63947902f7" />
 
 # Installation
