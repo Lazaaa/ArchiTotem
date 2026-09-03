@@ -2,7 +2,7 @@ name: Auto Build and Release
 
 on:
   push:
-    branches: [ main, master ]   # minden push-ra fut a főágon
+    branches: [ Architotem ]   # minden push-ra fut a főágon
 
 permissions:
   contents: write                # jogosultság a release és tag létrehozásához
