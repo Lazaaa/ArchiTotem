@@ -209,6 +209,8 @@ function ArchiTotem_InitDefaults()
                 bottomoncast = true,
                 shownumericcooldowns = true,
                 showtooltips = true,
+				tooltipScale = 1.0,   
+                shortTooltip = false,
             },
             Order = { first = "Earth", second = "Fire", third = "Water", forth = "Air" },
             Debug = false,
@@ -452,8 +454,18 @@ function ArchiTotem_OnEnter()
             local totemData = ArchiTotem_TotemData[buttonName]
             local tooltipspellID = ArchiTotem_GetSpellId(totemData.name)
             if tooltipspellID > 0 then
-                GameTooltip_SetDefaultAnchor(GameTooltip, this)
-                GameTooltip:SetSpell(tooltipspellID, SpellBookFrame.bookType)
+
+                GameTooltip:SetScale(tonumber(ArchiTotem_Options["Apperance"].tooltipScale) or 1.0)
+
+                if ArchiTotem_Options["Apperance"].shortTooltip == true then
+                    GameTooltip_SetDefaultAnchor(GameTooltip, this)
+                    GameTooltip:ClearLines()
+                    GameTooltip:AddLine(totemData.name, 1, 1, 1)
+                    GameTooltip:Show()
+                else
+                    GameTooltip_SetDefaultAnchor(GameTooltip, this)
+                    GameTooltip:SetSpell(tooltipspellID, SpellBookFrame.bookType)
+                end
             end
         end
     end
@@ -947,16 +959,19 @@ function ArchiTotem_CreateConfigPanel()
     if ArchiTotemConfigFrame then return end
 
     local frame = CreateFrame("Frame", "ArchiTotemConfigFrame", UIParent)
-    frame:SetWidth(280)
-    frame:SetHeight(420)
+    frame:SetWidth(300)
+    frame:SetHeight(470)
     frame:SetPoint("CENTER")
+    
     frame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         tile = true, tileSize = 16, edgeSize = 16,
         insets = { left = 4, right = 4, top = 4, bottom = 4 }
     })
-    frame:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+    frame:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
+    frame:SetBackdropBorderColor(1, 0.82, 0, 1)
+
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:SetScript("OnMouseDown", function() frame:StartMoving() end)
@@ -967,6 +982,7 @@ function ArchiTotem_CreateConfigPanel()
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOP", 0, -10)
     title:SetText(L["ArchiTotem - Settings"])
+    title:SetTextColor(1, 0.82, 0)
 
     local function CreateRow(yOffset, labelText)
         local row = CreateFrame("Frame", nil, frame)
@@ -978,10 +994,13 @@ function ArchiTotem_CreateConfigPanel()
         label:SetPoint("LEFT", 10, 0)
         label:SetText(labelText)
         label:SetWidth(100)
+        label:SetTextColor(1, 0.82, 0)
+        label:SetJustifyH("LEFT")
 
         local valueText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        valueText:SetPoint("CENTER", 0, 0)
+        valueText:SetPoint("RIGHT", row, "RIGHT", -30, 0) 
         valueText:SetText("")
+        valueText:SetTextColor(1, 1, 1)
 
         local btnMinus = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
         btnMinus:SetWidth(25)
@@ -998,22 +1017,24 @@ function ArchiTotem_CreateConfigPanel()
         return { row = row, label = label, value = valueText, minus = btnMinus, plus = btnPlus }
     end
 
-    local function CreateToggleRow(yOffset, labelText)
+    local function CreateToggleRow(yOffset, labelText, onClickFunc)
         local row = CreateFrame("Frame", nil, frame)
         row:SetWidth(260)
         row:SetHeight(24)
         row:SetPoint("TOP", 0, yOffset)
 
         local label = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        label:SetPoint("LEFT", 10, 0)
+        label:SetPoint("LEFT", 35, 0)
         label:SetText(labelText)
         label:SetWidth(180)
+        label:SetTextColor(1, 0.82, 0)
+        label:SetJustifyH("LEFT")
 
-        local btn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-        btn:SetWidth(60)
-        btn:SetHeight(22)
-        btn:SetPoint("RIGHT", -10, 0)
-        btn:SetText("ON")
+        local btn = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+        btn:SetWidth(24)
+        btn:SetHeight(24)
+        btn:SetPoint("LEFT", 5, 0)
+        btn:SetScript("OnClick", onClickFunc)
 
         return { row = row, label = label, button = btn }
     end
@@ -1049,8 +1070,24 @@ function ArchiTotem_CreateConfigPanel()
     yPos = yPos - 30
 
     -- Direction
-    local dirRow = CreateToggleRow(yPos, L["Popout direction"])
-    dirRow.button:SetScript("OnClick", function()
+    local dirRow = CreateFrame("Frame", nil, frame)
+    dirRow:SetWidth(260)
+    dirRow:SetHeight(24)
+    dirRow:SetPoint("TOP", 0, yPos)
+
+    local dirLabel = dirRow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    dirLabel:SetPoint("LEFT", 10, 0)
+    dirLabel:SetText(L["Popout direction"])
+    dirLabel:SetWidth(180)
+    dirLabel:SetTextColor(1, 0.82, 0)
+    dirLabel:SetJustifyH("LEFT")
+
+    local dirBtn = CreateFrame("Button", nil, dirRow, "UIPanelButtonTemplate")
+    dirBtn:SetWidth(60)
+    dirBtn:SetHeight(22)
+    dirBtn:SetPoint("RIGHT", -10, 0)
+    dirBtn:SetText("UP")
+    dirBtn:SetScript("OnClick", function()
         if ArchiTotem_Options["Apperance"].direction == "up" then
             ArchiTotem_SetDirection("down")
         else
@@ -1058,12 +1095,11 @@ function ArchiTotem_CreateConfigPanel()
         end
         ArchiTotem_UpdateConfigDisplay()
     end)
-    configWidgets.dir = dirRow
+    configWidgets.dir = { row = dirRow, label = dirLabel, button = dirBtn }
     yPos = yPos - 30
 
     -- Show all on hover
-    local showAllRow = CreateToggleRow(yPos, L["Show all on hover"])
-    showAllRow.button:SetScript("OnClick", function()
+    local showAllRow = CreateToggleRow(yPos, L["Show all totems on hover"], function()
         ArchiTotem_Options["Apperance"].allonmouseover = not ArchiTotem_Options["Apperance"].allonmouseover
         ArchiTotem_UpdateConfigDisplay()
     end)
@@ -1071,8 +1107,7 @@ function ArchiTotem_CreateConfigPanel()
     yPos = yPos - 30
 
     -- Bottom on cast
-    local bottomRow = CreateToggleRow(yPos, L["Move to bottom on cast"])
-    bottomRow.button:SetScript("OnClick", function()
+    local bottomRow = CreateToggleRow(yPos, L["Move to bottom on cast"], function()
         ArchiTotem_Options["Apperance"].bottomoncast = not ArchiTotem_Options["Apperance"].bottomoncast
         ArchiTotem_UpdateConfigDisplay()
     end)
@@ -1080,8 +1115,7 @@ function ArchiTotem_CreateConfigPanel()
     yPos = yPos - 30
 
     -- Numeric cooldowns
-    local timerRow = CreateToggleRow(yPos, L["Show numeric cooldowns"])
-    timerRow.button:SetScript("OnClick", function()
+    local timerRow = CreateToggleRow(yPos, L["Show numeric cooldowns"], function()
         ArchiTotem_Options["Apperance"].shownumericcooldowns = not ArchiTotem_Options["Apperance"].shownumericcooldowns
         ArchiTotem_UpdateConfigDisplay()
         if not ArchiTotem_Options["Apperance"].shownumericcooldowns then
@@ -1098,17 +1132,8 @@ function ArchiTotem_CreateConfigPanel()
     configWidgets.timer = timerRow
     yPos = yPos - 30
 
-    -- Tooltips
-    local tooltipRow = CreateToggleRow(yPos, L["Show tooltips"])
-    tooltipRow.button:SetScript("OnClick", function()
-        ArchiTotem_Options["Apperance"].showtooltips = not ArchiTotem_Options["Apperance"].showtooltips
-        ArchiTotem_UpdateConfigDisplay()
-    end)
-    configWidgets.tooltip = tooltipRow
-    yPos = yPos - 30
-
-    -- Scale
-    local scaleRow = CreateRow(yPos, L["Scale"])
+    -- Icons Scale
+    local scaleRow = CreateRow(yPos, L["Icons Scale"])
     scaleRow.minus:SetScript("OnClick", function()
         local newScale = tonumber(ArchiTotem_Options["Apperance"].scale) - 0.1
         if newScale < 0.5 then newScale = 0.5 end
@@ -1124,29 +1149,77 @@ function ArchiTotem_CreateConfigPanel()
     configWidgets.scale = scaleRow
     yPos = yPos - 30
 
+    -- Show tooltips
+    local tooltipRow = CreateToggleRow(yPos, L["Show tooltips"], function()
+        ArchiTotem_Options["Apperance"].showtooltips = not ArchiTotem_Options["Apperance"].showtooltips
+        ArchiTotem_UpdateConfigDisplay()
+    end)
+    configWidgets.tooltip = tooltipRow
+    yPos = yPos - 30
+
+    -- >>> Short tooltip (közvetlenül a "Show tooltips" sor alá rögzítve) <<<
+    ArchiTotemShortTipCheck = CreateFrame("CheckButton", "ArchiTotemShortTipCheck", frame, "UICheckButtonTemplate")
+    ArchiTotemShortTipCheck:SetWidth(24)
+    ArchiTotemShortTipCheck:SetHeight(24)
+    ArchiTotemShortTipCheck:SetPoint("TOPLEFT", tooltipRow.row, "BOTTOMLEFT", 5, -5)
+    ArchiTotemShortTipCheck:SetScript("OnClick", function()
+        ArchiTotem_Options["Apperance"].shortTooltip = ArchiTotemShortTipCheck:GetChecked()
+        ArchiTotem_UpdateConfigDisplay()
+    end)
+
+    local shortTipLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    shortTipLabel:SetPoint("LEFT", ArchiTotemShortTipCheck, "RIGHT", 8, 0)
+    shortTipLabel:SetText(L["Short tooltip (only name)"] or "Short tooltip (only name)")
+    shortTipLabel:SetTextColor(1, 0.82, 0)
+    shortTipLabel:SetJustifyH("LEFT")
+
+    -- Tooltip scale
+    local tooltipScaleRow = CreateRow(yPos, L["Tooltip scale"])
+    tooltipScaleRow.row:ClearAllPoints()
+    tooltipScaleRow.row:SetPoint("TOPLEFT", ArchiTotemShortTipCheck, "BOTTOMLEFT", 0, -10)
+    tooltipScaleRow.minus:SetScript("OnClick", function()
+        local current = tonumber(ArchiTotem_Options["Apperance"].tooltipScale or 1.0)
+        local newScale = current - 0.1
+        if newScale < 0.2 then newScale = 0.2 end
+        ArchiTotem_Options["Apperance"].tooltipScale = newScale
+        ArchiTotem_UpdateConfigDisplay()
+    end)
+    tooltipScaleRow.plus:SetScript("OnClick", function()
+        local current = tonumber(ArchiTotem_Options["Apperance"].tooltipScale or 1.0)
+        local newScale = current + 0.1
+        if newScale > 1.5 then newScale = 1.5 end
+        ArchiTotem_Options["Apperance"].tooltipScale = newScale
+        ArchiTotem_UpdateConfigDisplay()
+    end)
+    configWidgets.tooltipScale = tooltipScaleRow
+
+    -- Reset button
     local resetBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-	resetBtn:SetWidth(120)
-	resetBtn:SetHeight(24)
-	resetBtn:SetPoint("BOTTOM", 0, 50)
-	resetBtn:SetText(L["Reset Data"])
-	resetBtn:SetScript("OnClick", function()
-		ArchiTotem_ResetData()
-		ArchiTotemConfigFrame:Hide()
-	end)
+    resetBtn:SetWidth(120)
+    resetBtn:SetHeight(24)
+    resetBtn:SetPoint("BOTTOM", 0, 50)
+    resetBtn:SetText(L["Reset Data"])
+    resetBtn:SetScript("OnClick", function()
+        ArchiTotem_ResetData()
+        ArchiTotemConfigFrame:Hide()
+    end)
 
     -- Close button
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-	closeBtn:SetWidth(80)
-	closeBtn:SetHeight(24)
-	closeBtn:SetPoint("BOTTOM", 0, 15)
-	closeBtn:SetText(L["Close"])
-	closeBtn:SetScript("OnClick", function()
-		ArchiTotemConfigFrame:Hide()
-	end)
+    closeBtn:SetWidth(80)
+    closeBtn:SetHeight(24)
+    closeBtn:SetPoint("BOTTOM", 0, 15)
+    closeBtn:SetText(L["Close"])
+    closeBtn:SetScript("OnClick", function()
+        ArchiTotemConfigFrame:Hide()
+    end)
 
     local info = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     info:SetPoint("BOTTOM", 0, 40)
     info:SetText(L["Settings are saved automatically"])
+    info:SetTextColor(0.8, 0.8, 0.8)
+
+    ArchiTotemTipScaleValue = tooltipScaleRow.value
 end
 
 function ArchiTotem_ChangeCount(element, delta)
@@ -1174,7 +1247,7 @@ function ArchiTotem_UpdateConfigDisplay()
     configWidgets.dir.button:SetText(dir == "up" and "UP" or "DOWN")
 
     local function setToggle(row, value)
-        row.button:SetText(value and "ON" or "OFF")
+        row.button:SetChecked(value)
     end
     setToggle(configWidgets.showAll, ArchiTotem_Options["Apperance"].allonmouseover)
     setToggle(configWidgets.bottom, ArchiTotem_Options["Apperance"].bottomoncast)
@@ -1182,6 +1255,13 @@ function ArchiTotem_UpdateConfigDisplay()
     setToggle(configWidgets.tooltip, ArchiTotem_Options["Apperance"].showtooltips)
 
     configWidgets.scale.value:SetText(string.format("%.1f", tonumber(ArchiTotem_Options["Apperance"].scale)))
+
+    if ArchiTotemShortTipCheck then
+        ArchiTotemShortTipCheck:SetChecked(ArchiTotem_Options["Apperance"].shortTooltip or false)
+    end
+    if ArchiTotemTipScaleValue then
+        ArchiTotemTipScaleValue:SetText(string.format("%.1f", tonumber(ArchiTotem_Options["Apperance"].tooltipScale) or 1.0))
+    end
 end
 
 function ArchiTotem_InitMinimapButton()
