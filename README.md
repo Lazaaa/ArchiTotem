@@ -48,5 +48,4 @@ Moving the bar:
 # Known Issues
 <ul>
 <li>There's no way to down-rank a totem launched by the addon.</li>
-<li>It does not save the position, it is not possible at the moment.</li>
 </ul>
