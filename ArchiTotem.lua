@@ -197,6 +197,9 @@ function ArchiTotem_Noop() return end
 
 function ArchiTotem_InitDefaults()
     if not ArchiTotem_Options then
+        local screenWidth = GetScreenWidth()
+        local screenHeight = GetScreenHeight()
+
         ArchiTotem_Options = {
             Ear = { max = 5, shown = 1 },
             Fir = { max = 5, shown = 1 },
@@ -209,21 +212,14 @@ function ArchiTotem_InitDefaults()
                 bottomoncast = true,
                 shownumericcooldowns = true,
                 showtooltips = true,
-				tooltipScale = 1.0,   
+                tooltipScale = 1.0,
                 shortTooltip = false,
+
+                posX = screenWidth / 2,
+                posY = screenHeight / 2,
             },
             Order = { first = "Earth", second = "Fire", third = "Water", forth = "Air" },
             Debug = false,
-        }
-    end
-
-    if not ArchiTotem_Options["Apperance"].position then
-        ArchiTotem_Options["Apperance"].position = {
-            point = "CENTER",
-            relativeTo = UIParent,
-            relativePoint = "CENTER",
-            xOfs = 0,
-            yOfs = 0,
         }
     end
 
@@ -288,11 +284,11 @@ function ArchiTotem_InitDefaults()
         
         local userShown = ArchiTotem_Options[threeLetter].shown
         if #tempList > 0 then
-			ArchiTotem_Options[threeLetter].shown = math.max(1, math.min(userShown, #tempList))
-		else
-			ArchiTotem_Options[threeLetter].shown = 0
-		end
-	end
+            ArchiTotem_Options[threeLetter].shown = math.max(1, math.min(userShown, #tempList))
+        else
+            ArchiTotem_Options[threeLetter].shown = 0
+        end
+    end
 end
 
 -- =====================================================
@@ -327,14 +323,12 @@ function ArchiTotem_OnEvent(event)
     if event == "VARIABLES_LOADED" then
         ArchiTotem_InitDefaults()
 
-        -- Csak a pozíciót állítjuk középre, de a többi beállítást MEGTARTJUK!
-        ArchiTotem_Options["Apperance"].position = {
-            point = "CENTER",
-            relativeTo = UIParent,
-            relativePoint = "CENTER",
-            xOfs = 0,
-            yOfs = 0,
-        }
+        local posX = ArchiTotem_Options["Apperance"].posX or 0
+        local posY = ArchiTotem_Options["Apperance"].posY or 0
+        ArchiTotemFrame:ClearAllPoints()
+        ArchiTotemFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", posX, posY)
+
+        ArchiTotemFrame:Show()
 
         ArchiTotem_ClearAllCooldowns()
         ArchiTotem_UpdateTextures()
@@ -342,15 +336,6 @@ function ArchiTotem_OnEvent(event)
         ArchiTotem_SetDirection(ArchiTotem_Options["Apperance"].direction)
         ArchiTotem_SetScale(ArchiTotem_Options["Apperance"].scale)
         ArchiTotem_Order(ArchiTotem_Options["Order"].first, ArchiTotem_Options["Order"].second, ArchiTotem_Options["Order"].third, ArchiTotem_Options["Order"].forth)
-
-        if ArchiTotem_Options["Apperance"].position then
-            local pos = ArchiTotem_Options["Apperance"].position
-            local relativeTo = pos.relativeTo
-            if type(relativeTo) == "string" then
-                relativeTo = _G[relativeTo] or UIParent
-            end
-            ArchiTotemFrame:SetPoint(pos.point, relativeTo, pos.relativePoint, pos.xOfs, pos.yOfs)
-        end
 
         ArchiTotem_InitMinimapButton()
 
@@ -398,7 +383,7 @@ function ArchiTotem_OnEvent(event)
 end
 
 -- =====================================================
---  DRAG HANDLING
+--  DRAG HANDLING (UAHeal stílus)
 -- =====================================================
 
 function ArchiTotem_OnDragStart()
@@ -410,15 +395,9 @@ end
 function ArchiTotem_OnDragStop()
     ArchiTotemFrame:StopMovingOrSizing()
 
-    local point, relativeTo, relativePoint, xOfs, yOfs = ArchiTotemFrame:GetPoint()
-    if not ArchiTotem_Options["Apperance"].position then
-        ArchiTotem_Options["Apperance"].position = {}
-    end
-    ArchiTotem_Options["Apperance"].position.point = point
-    ArchiTotem_Options["Apperance"].position.relativeTo = relativeTo
-    ArchiTotem_Options["Apperance"].position.relativePoint = relativePoint
-    ArchiTotem_Options["Apperance"].position.xOfs = xOfs
-    ArchiTotem_Options["Apperance"].position.yOfs = yOfs
+    local x, y = GetCursorPosition()
+    ArchiTotem_Options["Apperance"].posX = x
+    ArchiTotem_Options["Apperance"].posY = y
 end
 
 -- =====================================================
@@ -724,11 +703,18 @@ function ArchiTotem_SetScale(scale)
     end
 end
 
+
 function ArchiTotem_ResetData()
     ArchiTotem_TotemData = nil
     ArchiTotem_Options = nil
 
     ArchiTotem_InitDefaults()
+
+    local posX = ArchiTotem_Options["Apperance"].posX or 0
+    local posY = ArchiTotem_Options["Apperance"].posY or 0
+    ArchiTotemFrame:ClearAllPoints()
+    ArchiTotemFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", posX, posY)
+    ArchiTotemFrame:Show()
 
     ArchiTotem_ClearAllCooldowns()
     ArchiTotem_UpdateTextures()
@@ -752,7 +738,7 @@ function ArchiTotem_OnUpdate(arg1)
     this.TimeSinceLastUpdate = this.TimeSinceLastUpdate + arg1
 
     if this.TimeSinceLastUpdate > CLOCK_UPDATE_RATE then
-        -- Active totem durations
+
         if ArchiTotemActiveTotem then
             for k, v in pairs(ArchiTotemActiveTotem) do
                 if GetTime() > (v.casted + v.duration) then
@@ -1157,7 +1143,7 @@ function ArchiTotem_CreateConfigPanel()
     configWidgets.tooltip = tooltipRow
     yPos = yPos - 30
 
-    -- >>> Short tooltip (közvetlenül a "Show tooltips" sor alá rögzítve) <<<
+    -- Short tooltip
     ArchiTotemShortTipCheck = CreateFrame("CheckButton", "ArchiTotemShortTipCheck", frame, "UICheckButtonTemplate")
     ArchiTotemShortTipCheck:SetWidth(24)
     ArchiTotemShortTipCheck:SetHeight(24)
