@@ -217,6 +217,8 @@ function ArchiTotem_InitDefaults()
 
                 posX = screenWidth / 2,
                 posY = screenHeight / 2,
+
+                mmAngle = 210,   -- minimap icon angle (degrees)
             },
             Order = { first = "Earth", second = "Fire", third = "Water", forth = "Air" },
             Debug = false,
@@ -239,15 +241,15 @@ function ArchiTotem_InitDefaults()
         for _, element in ipairs(totemElements) do
             local threeLetter = string.sub(element, 1, 3)
             local maxShown = ArchiTotem_Options[threeLetter].shown
-            
+
             for i = ArchiTotem_Options[threeLetter].max, 1, -1 do
                 local buttonName = "ArchiTotemButton_" .. element .. i
                 local totemData = ArchiTotem_TotemData[buttonName]
-                
+
                 if totemData then
                     local spellName = L[totemData.name] or totemData.name
                     local spellID = ArchiTotem_GetSpellId(spellName)
-                    
+
                     if spellID == 0 then
                         ArchiTotem_TotemData[buttonName] = nil
                         if i <= maxShown then
@@ -263,7 +265,7 @@ function ArchiTotem_InitDefaults()
     for _, element in ipairs(totemElements) do
         local threeLetter = string.sub(element, 1, 3)
         local max = ArchiTotem_Options[threeLetter].max
-        
+
         local tempList = {}
         for i = 1, max do
             local btnName = "ArchiTotemButton_" .. element .. i
@@ -271,17 +273,17 @@ function ArchiTotem_InitDefaults()
                 table.insert(tempList, ArchiTotem_TotemData[btnName])
             end
         end
-        
+
         for i = 1, max do
             local btnName = "ArchiTotemButton_" .. element .. i
             ArchiTotem_TotemData[btnName] = nil
         end
-        
+
         for i, data in ipairs(tempList) do
             local btnName = "ArchiTotemButton_" .. element .. i
             ArchiTotem_TotemData[btnName] = data
         end
-        
+
         local userShown = ArchiTotem_Options[threeLetter].shown
         if #tempList > 0 then
             ArchiTotem_Options[threeLetter].shown = math.max(1, math.min(userShown, #tempList))
@@ -394,10 +396,10 @@ end
 
 function ArchiTotem_OnDragStop()
     ArchiTotemFrame:StopMovingOrSizing()
-
     local x, y = GetCursorPosition()
     ArchiTotem_Options["Apperance"].posX = x
     ArchiTotem_Options["Apperance"].posY = y
+    UpdateUIPanelPositions()
 end
 
 -- =====================================================
@@ -723,6 +725,12 @@ function ArchiTotem_ResetData()
     ArchiTotem_SetScale(ArchiTotem_Options["Apperance"].scale)
     ArchiTotem_Order(ArchiTotem_Options["Order"].first, ArchiTotem_Options["Order"].second, ArchiTotem_Options["Order"].third, ArchiTotem_Options["Order"].forth)
 
+    -- Reset minimap icon angle too
+    ArchiTotem_Options["Apperance"].mmAngle = 210
+    if ArchiTotemMinimapPlace then
+        ArchiTotemMinimapPlace()
+    end
+
     if ArchiTotemConfigFrame and ArchiTotemConfigFrame:IsShown() then
         ArchiTotem_UpdateConfigDisplay()
     end
@@ -907,30 +915,145 @@ end
 local ArchiTotemMinimapButton = nil
 local ArchiTotemConfigFrame = nil
 local configWidgets = {}
+local ArchiTotemMinimapPlace = nil   -- exposed for /at reset
+local ARCHITOTEM_MM_ICON = "Interface\\AddOns\\ArchiTotem\\ArchiTotem"
+local ARCHITOTEM_MM_SIZE = 31
+
+-- atan2 fallback
+local function ArchiTotem_Atan2(y, x)
+    if math.atan2 then return math.atan2(y, x) end
+    if x > 0 then return math.atan(y / x) end
+    if x < 0 then return math.atan(y / x) + math.pi end
+    return (y >= 0) and (math.pi / 2) or -(math.pi / 2)
+end
 
 function ArchiTotem_CreateMinimapButton()
     if ArchiTotemMinimapButton then return end
 
-    ArchiTotemMinimapButton = CreateFrame("Button", "ArchiTotemMinimapButton", Minimap)
-    ArchiTotemMinimapButton:SetWidth(30)
-    ArchiTotemMinimapButton:SetHeight(30)
-    ArchiTotemMinimapButton:SetPoint("TOPLEFT", Minimap, "TOPLEFT", -20, -50)
-    ArchiTotemMinimapButton:SetNormalTexture("Interface\\Icons\\Spell_Nature_StrengthOfEarthTotem02")
-    ArchiTotemMinimapButton:SetScript("OnClick", function()
+    local mm = CreateFrame("Button", "ArchiTotemMinimapButton", Minimap)
+    mm:SetFrameStrata("MEDIUM")
+    mm:SetFrameLevel(8)
+    mm:SetWidth(ARCHITOTEM_MM_SIZE)
+    mm:SetHeight(ARCHITOTEM_MM_SIZE)
+    mm:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    mm:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+
+    -- Circular tracking border (vanilla minimap look)
+    local border = mm:CreateTexture(nil, "OVERLAY")
+    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    border:SetWidth(54)
+    border:SetHeight(54)
+    border:SetPoint("TOPLEFT", mm, "TOPLEFT")
+
+    -- Icon (the owl/clock mask)
+    local icon = mm:CreateTexture(nil, "ARTWORK")
+    icon:SetTexture(ARCHITOTEM_MM_ICON)
+    icon:SetWidth(20)
+    icon:SetHeight(20)
+    icon:SetPoint("CENTER", mm, "CENTER", 0, 0)
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    -- Angle state (persisted in ArchiTotem_Options.Apperance.mmAngle)
+    local angle = (ArchiTotem_Options and ArchiTotem_Options["Apperance"].mmAngle) or 210
+
+    local function place()
+        local mw = Minimap:GetWidth()  or 160
+        local mh = Minimap:GetHeight() or mw
+        local R  = mw / 2 + 5
+        local a  = math.rad(angle)
+        mm:ClearAllPoints()
+        mm:SetPoint("TOPLEFT", Minimap, "TOPLEFT",
+            mw / 2 + math.cos(a) * R - 15,
+            -mh / 2 + math.sin(a) * R + 15)
+    end
+    ArchiTotemMinimapPlace = place
+
+    -- Drag state (cursor-delta -> angle, oneclick-heal style)
+    local dragging, moved = false, false
+    local lastCX, lastCY, baseCX, baseCY
+    local vx = math.cos(math.rad(angle)) * 80
+    local vy = math.sin(math.rad(angle)) * 80
+
+    mm:SetScript("OnMouseDown", function()
+        dragging, moved = true, false
+        local cx, cy
+        if GetCursorPosition then cx, cy = GetCursorPosition() end
+        lastCX, lastCY = cx, cy
+        baseCX, baseCY = cx, cy
+    end)
+
+    mm:SetScript("OnMouseUp", function()
+        if not dragging then return end
+        dragging = false
+        lastCX, lastCY = nil, nil
+        if moved and ArchiTotem_Options then
+            ArchiTotem_Options["Apperance"].mmAngle = angle
+            place()
+        end
+    end)
+
+    mm:SetScript("OnUpdate", function()
+        if not dragging or not GetCursorPosition then return end
+        local cx, cy = GetCursorPosition()
+        if not cx then return end
+        if lastCX then
+            vx = vx + (cx - lastCX)
+            vy = vy + (cy - lastCY)
+            if baseCX and math.abs(cx - baseCX) + math.abs(cy - baseCY) > 8 then
+                moved = true
+            end
+        end
+        lastCX, lastCY = cx, cy
+        if moved and (vx ~= 0 or vy ~= 0) then
+            local a2 = math.deg(ArchiTotem_Atan2(vy, vx))
+            if a2 < 0 then a2 = a2 + 360 end
+            angle = a2
+            place()
+        end
+    end)
+
+    -- ---- Click
+    mm:SetScript("OnClick", function(self, btn)
+        if moved then moved = false; return end
+
+        -- Ctrl+RightClick = reset position
+        if btn == "RightButton" and IsControlKeyDown and IsControlKeyDown() then
+            angle = 210
+            vx = math.cos(math.rad(angle)) * 80
+            vy = math.sin(math.rad(angle)) * 80
+            if ArchiTotem_Options then
+                ArchiTotem_Options["Apperance"].mmAngle = angle
+            end
+            place()
+            ArchiTotem_Print("Minimap icon position reset.")
+            return
+        end
+
+        -- Any other click -> toggle the config panel
         if ArchiTotemConfigFrame and ArchiTotemConfigFrame:IsShown() then
             ArchiTotemConfigFrame:Hide()
         else
             ArchiTotem_ShowConfigPanel()
         end
     end)
-    ArchiTotemMinimapButton:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(ArchiTotemMinimapButton, "ANCHOR_LEFT")
-        GameTooltip:SetText("ArchiTotem Settings")
+
+    -- ---- Tooltip
+    mm:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self or mm, "ANCHOR_LEFT")
+        GameTooltip:SetText("ArchiTotem Settings", 1, 1, 1)
+        GameTooltip:AddLine("Left-click to open the settings.", 1, 0.82, 0)
+        GameTooltip:AddLine("Drag to move the icon around the minimap.", 1, 0.82, 0)
+        GameTooltip:AddLine("Ctrl+Right-click to reset position.", 1, 0.82, 0)
         GameTooltip:Show()
     end)
-    ArchiTotemMinimapButton:SetScript("OnLeave", function()
+
+    mm:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
+
+    -- Initial placement
+    place()
+    ArchiTotemMinimapButton = mm
 end
 
 function ArchiTotem_ShowConfigPanel()
@@ -948,7 +1071,7 @@ function ArchiTotem_CreateConfigPanel()
     frame:SetWidth(300)
     frame:SetHeight(470)
     frame:SetPoint("CENTER")
-    
+
     frame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -984,7 +1107,7 @@ function ArchiTotem_CreateConfigPanel()
         label:SetJustifyH("LEFT")
 
         local valueText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        valueText:SetPoint("RIGHT", row, "RIGHT", -30, 0) 
+        valueText:SetPoint("RIGHT", row, "RIGHT", -30, 0)
         valueText:SetText("")
         valueText:SetTextColor(1, 1, 1)
 
