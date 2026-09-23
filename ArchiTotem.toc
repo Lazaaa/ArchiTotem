@@ -1,11 +1,10 @@
 ## Interface: 11200
 ## Title: ArchiTotem
 ## Notes: All totems on 4 barslots!
-## Version: 1.2.4
+## Version: 1.2.9
 ## Author: Kharon
 ## Original-version: Nahoom of Dragonblight EU 1.41
 ## SavedVariablesPerCharacter: ArchiTotem_TotemData, ArchiTotem_Options
 
 Locale\Localization.xml
-
 ArchiTotem.xml
