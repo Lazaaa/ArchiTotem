@@ -5,6 +5,21 @@ local author = GetAddOnMetadata("ArchiTotem", "Author")
 
 local _, class = UnitClass("player")
 local CLOCK_UPDATE_RATE = 0.1
+local getn = table.getn          -- Lua 5.0: no "#"
+local BOOK = BOOKTYPE_SPELL or "spell"
+
+-- declared up here because ArchiTotem_ResetData (above their old place) uses them
+local ArchiTotemMinimapPlace = nil
+local castedTime = 0             -- when a totem button/key was pressed
+local lastTimerUpdate = 0
+local tooltipOldScale = nil
+
+-- key binding names (set here, after the translations are loaded)
+BINDING_HEADER_ARCHITOTEM = "ArchiTotem"
+BINDING_NAME_CAST_EARTH_TOTEM = L["Cast Earth Totem"]
+BINDING_NAME_CAST_FIRE_TOTEM = L["Cast Fire Totem"]
+BINDING_NAME_CAST_WATER_TOTEM = L["Cast Water Totem"]
+BINDING_NAME_CAST_AIR_TOTEM = L["Cast Air Totem"]
 
 -- Global variables
 ArchiTotemCasted = nil
@@ -274,6 +289,20 @@ function ArchiTotem_InitDefaults()
             end
         end
 
+        -- restore the order the player set with Ctrl/Alt-click (it was saved
+        -- in ArchiTotem_Options.TotemOrder but never read back)
+        local saved = ArchiTotem_Options.TotemOrder
+        if saved then
+            local rank = {}
+            for i = 1, max do
+                local d = saved["ArchiTotemButton_" .. element .. i]
+                if d and d.name then rank[d.name] = i end
+            end
+            for i, data in ipairs(tempList) do data.sortKey = (rank[data.name] or 100) * 100 + i end
+            table.sort(tempList, function(a, b) return a.sortKey < b.sortKey end)
+            for _, data in ipairs(tempList) do data.sortKey = nil end
+        end
+
         for i = 1, max do
             local btnName = "ArchiTotemButton_" .. element .. i
             ArchiTotem_TotemData[btnName] = nil
@@ -285,8 +314,8 @@ function ArchiTotem_InitDefaults()
         end
 
         local userShown = ArchiTotem_Options[threeLetter].shown
-        if #tempList > 0 then
-            ArchiTotem_Options[threeLetter].shown = math.max(1, math.min(userShown, #tempList))
+        if getn(tempList) > 0 then
+            ArchiTotem_Options[threeLetter].shown = math.max(1, math.min(userShown, getn(tempList)))
         else
             ArchiTotem_Options[threeLetter].shown = 0
         end
@@ -311,6 +340,10 @@ function ArchiTotem_OnLoad()
         this:RegisterEvent("SPELLCAST_STOP")
         this:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
         this:RegisterEvent("CHAT_MSG_SPELL_FAILED_LOCALPLAYER")
+        this:RegisterEvent("SPELLCAST_FAILED")
+        this:RegisterEvent("SPELLCAST_INTERRUPTED")
+        this:RegisterEvent("UI_ERROR_MESSAGE")
+        this:RegisterEvent("LEARNED_SPELL_IN_TAB")
         SLASH_ARCHITOTEM1 = "/architotem"
         SLASH_ARCHITOTEM2 = "/at"
         SlashCmdList["ARCHITOTEM"] = ArchiTotem_Command
@@ -341,11 +374,21 @@ function ArchiTotem_OnEvent(event)
 
         ArchiTotem_InitMinimapButton()
 
-    elseif event == "CHAT_MSG_SPELL_FAILED_LOCALPLAYER" then
-        ArchiTotemCasted = 0
+    elseif event == "CHAT_MSG_SPELL_FAILED_LOCALPLAYER" or event == "SPELLCAST_FAILED"
+        or event == "SPELLCAST_INTERRUPTED" or event == "UI_ERROR_MESSAGE" then
+        -- the totem was not cast (no mana, global cooldown, ...): forget it, or
+        -- the next unrelated spell would be taken for this totem
+        ArchiTotemCasted = nil
+
+    elseif event == "LEARNED_SPELL_IN_TAB" then
+        -- a new totem shows up without relogging
+        if ArchiTotem_Options then ArchiTotem_Rebuild() end
 
     elseif event == "SPELLCAST_STOP" then
-        if ArchiTotemCasted == 1 then
+        if ArchiTotemCasted == 1 and GetTime() - castedTime > 1.5 then
+            ArchiTotemCasted = nil -- stale flag from a cast that never happened
+        end
+        if ArchiTotemCasted == 1 and ArchiTotemCastedButton and ArchiTotem_TotemData[ArchiTotemCastedButton] then
             ArchiTotemActiveTotem[ArchiTotemCastedElement] = ArchiTotemCastedTotem
             ArchiTotemActiveTotem[ArchiTotemCastedElement].casted = GetTime()
             ArchiTotem_TotemData[ArchiTotemCastedButton].cooldownstarted = GetTime()
@@ -360,7 +403,7 @@ function ArchiTotem_OnEvent(event)
                         topbutton = string.sub(ArchiTotemCastedButton, 1, -2) .. i
                         bottombutton = string.sub(ArchiTotemCastedButton, 1, -2) .. (i - 1)
                         ArchiTotem_Switch(topbutton, bottombutton)
-                        if ArchiTotem_TotemData[topbutton].cooldownstarted == nil then
+                        if ArchiTotem_TotemData[topbutton] and ArchiTotem_TotemData[topbutton].cooldownstarted == nil then
                             local duration = 1.5
                             local cooldownObj = _G[topbutton .. "Cooldown"]
                             if cooldownObj then
@@ -368,7 +411,7 @@ function ArchiTotem_OnEvent(event)
                             end
                         end
                     end
-                    local duration = ArchiTotem_TotemData[bottombutton].cooldown
+                    local duration = ArchiTotem_TotemData[bottombutton] and ArchiTotem_TotemData[bottombutton].cooldown or 0
                     if duration == 0 then duration = 1.5 end
                     local bottomCooldownObj = _G[bottombutton .. "Cooldown"]
                     if bottomCooldownObj then
@@ -396,10 +439,16 @@ end
 
 function ArchiTotem_OnDragStop()
     ArchiTotemFrame:StopMovingOrSizing()
-    local x, y = GetCursorPosition()
-    ArchiTotem_Options["Apperance"].posX = x
-    ArchiTotem_Options["Apperance"].posY = y
-    UpdateUIPanelPositions()
+    if not ArchiTotem_Options then return end
+    -- the frame's own centre, in the same units SetPoint uses on load
+    -- (GetCursorPosition is in raw screen pixels and ignores the UI scale)
+    local x, y = ArchiTotemFrame:GetCenter()
+    if x and y then
+        ArchiTotem_Options["Apperance"].posX = x
+        ArchiTotem_Options["Apperance"].posY = y
+        ArchiTotemFrame:ClearAllPoints()
+        ArchiTotemFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
+    end
 end
 
 -- =====================================================
@@ -436,6 +485,8 @@ function ArchiTotem_OnEnter()
             local tooltipspellID = ArchiTotem_GetSpellId(totemData.name)
             if tooltipspellID > 0 then
 
+                -- GameTooltip is shared by the whole UI: remember its scale
+                tooltipOldScale = tooltipOldScale or GameTooltip:GetScale()
                 GameTooltip:SetScale(tonumber(ArchiTotem_Options["Apperance"].tooltipScale) or 1.0)
 
                 if ArchiTotem_Options["Apperance"].shortTooltip == true then
@@ -445,7 +496,7 @@ function ArchiTotem_OnEnter()
                     GameTooltip:Show()
                 else
                     GameTooltip_SetDefaultAnchor(GameTooltip, this)
-                    GameTooltip:SetSpell(tooltipspellID, SpellBookFrame.bookType)
+                    GameTooltip:SetSpell(tooltipspellID, BOOK)
                 end
             end
         end
@@ -453,6 +504,10 @@ function ArchiTotem_OnEnter()
 end
 
 function ArchiTotem_OnLeave()
+    if tooltipOldScale then
+        GameTooltip:SetScale(tooltipOldScale)
+        tooltipOldScale = nil
+    end
     ArchiTotem_UpdateShown()
 end
 
@@ -460,14 +515,15 @@ function ArchiTotem_OnClick()
     if IsAltKeyDown() then
         local underTotemNumber = tonumber(string.sub(this:GetName(), -1, -1)) - 1
         local underTotem = string.sub(this:GetName(), 1, -2) .. underTotemNumber
-        if underTotemNumber > 0 then
+        if underTotemNumber > 0 and ArchiTotem_TotemData[this:GetName()] and ArchiTotem_TotemData[underTotem] then
             ArchiTotem_Switch(this:GetName(), underTotem)
         end
     elseif IsControlKeyDown() then
         local overTotemNumber = tonumber(string.sub(this:GetName(), -1, -1)) + 1
         local overTotem = string.sub(this:GetName(), 1, -2) .. overTotemNumber
         local maxOfElement = string.sub(this:GetName(), 18, 20)
-        if overTotemNumber < ArchiTotem_Options[maxOfElement].max + 1 then
+        if overTotemNumber < ArchiTotem_Options[maxOfElement].max + 1
+           and ArchiTotem_TotemData[this:GetName()] and ArchiTotem_TotemData[overTotem] then
             ArchiTotem_Switch(this:GetName(), overTotem)
         end
     else
@@ -495,9 +551,8 @@ function ArchiTotem_GetSpellId(spell)
     return spellID
 end
 
-function ArchiTotem_CastTotem()
-    local buttonName = this:GetName()
-    local totemData = ArchiTotem_TotemData[buttonName]
+function ArchiTotem_CastButton(buttonName)
+    local totemData = ArchiTotem_TotemData and ArchiTotem_TotemData[buttonName]
     if not totemData then return end
 
     local localizeSpell = L[totemData.name] or totemData.name
@@ -506,6 +561,7 @@ function ArchiTotem_CastTotem()
         local spellID = ArchiTotem_GetSpellId(localizeSpell)
         if spellID > 0 then
             ArchiTotemCasted = 1
+            castedTime = GetTime()
             ArchiTotemCastedTotem = totemData
             ArchiTotemCastedElement = string.sub(buttonName, 18, -2)
             ArchiTotemCastedButton = buttonName
@@ -514,13 +570,25 @@ function ArchiTotem_CastTotem()
                 ArchiTotemCastedTotem.casted = GetTime() - ArchiTotemCastedTotem.cooldown
             end
 
-            RunScript("CastSpellByName('" .. localizeSpell .. "')")
+            -- The Emberveil client refuses a direct CastSpellByName from addon
+            -- code ("<spell name>" error), but accepts it through RunScript.
+            -- %q quotes the name safely (names with ' or " work too).
+            RunScript(string.format("CastSpellByName(%q)", localizeSpell))
         else
             UIErrorsFrame:AddMessage("Spell not found: " .. tostring(localizeSpell), 1.0, 0.1, 0.1)
         end
     else
         UIErrorsFrame:AddMessage("Invalid totem name: " .. tostring(totemData.name), 1.0, 0.1, 0.1)
     end
+end
+
+function ArchiTotem_CastTotem()
+    ArchiTotem_CastButton(this:GetName())
+end
+
+-- used by Bindings.xml
+function ArchiTotem_CastElement(element)
+    ArchiTotem_CastButton("ArchiTotemButton_" .. element .. "1")
 end
 
 -- =====================================================
@@ -539,14 +607,20 @@ function ArchiTotem_Switch(arg1, arg2)
     local cooldown1 = _G[arg1 .. "Cooldown"]
     local cooldown2 = _G[arg2 .. "Cooldown"]
 
-    if ArchiTotem_GetSpellId(ArchiTotem_TotemData[arg1].name) ~= 0 and cooldown1 then
-        local _, duration1 = GetSpellCooldown(ArchiTotem_GetSpellId(ArchiTotem_TotemData[arg1].name), BOOKTYPE_SPELL)
-        CooldownFrame_SetTimer(cooldown1, ArchiTotem_TotemData[arg1].casted, duration1, 1)
+    -- show the spell's real cooldown (start time from the game: the totem may
+    -- never have been cast, then "casted" is nil and the old code crashed)
+    local function showCooldown(button, cooldownObj)
+        local data = ArchiTotem_TotemData[button]
+        if not (data and cooldownObj) then return end
+        local id = ArchiTotem_GetSpellId(data.name)
+        if id == 0 then return end
+        local start, duration, enable = GetSpellCooldown(id, BOOK)
+        if start and duration then
+            CooldownFrame_SetTimer(cooldownObj, start, duration, enable or 1)
+        end
     end
-    if ArchiTotem_GetSpellId(ArchiTotem_TotemData[arg2].name) ~= 0 and cooldown2 then
-        local _, duration2 = GetSpellCooldown(ArchiTotem_GetSpellId(ArchiTotem_TotemData[arg2].name), BOOKTYPE_SPELL)
-        CooldownFrame_SetTimer(cooldown2, ArchiTotem_TotemData[arg2].casted, duration2, 1)
-    end
+    showCooldown(arg1, cooldown1)
+    showCooldown(arg2, cooldown2)
     ArchiTotem_UpdateTextures()
 
     if ArchiTotem_Options then
@@ -611,6 +685,8 @@ function ArchiTotem_UpdateTextures()
             if texObj and ArchiTotem_TotemData[buttonName] then
                 texObj:SetTexture(ArchiTotem_TotemData[buttonName].icon)
                 texObj:Show()
+            elseif texObj then
+                texObj:Hide() -- empty slot: no stale icon
             end
         end
     end
@@ -743,14 +819,16 @@ end
 -- =====================================================
 
 function ArchiTotem_OnUpdate(arg1)
-    this.TimeSinceLastUpdate = this.TimeSinceLastUpdate + arg1
-
-    if this.TimeSinceLastUpdate > CLOCK_UPDATE_RATE then
+    -- every visible totem button runs this OnUpdate: do the work once per tick
+    local now = GetTime()
+    if now - lastTimerUpdate < CLOCK_UPDATE_RATE then return end
+    lastTimerUpdate = now
+    do
 
         if ArchiTotemActiveTotem then
             for k, v in pairs(ArchiTotemActiveTotem) do
                 if GetTime() > (v.casted + v.duration) then
-                    v = nil
+                    ArchiTotemActiveTotem[k] = nil   -- "v = nil" did not remove it
                     _G[k .. "DurationText"]:Hide()
                 else
                     local seconds = string.format("%.0f", (v.duration + (v.casted - GetTime())))
@@ -781,6 +859,7 @@ function ArchiTotem_OnUpdate(arg1)
                             local minutes = string.format("%.0f", ((seconds - mod(seconds, 60)) / 60))
                             local seconds = mod(seconds, 60)
                             if minutes ~= "0" then
+                                if seconds < 10 then seconds = "0" .. seconds end
                                 _G[k .. "CooldownText"]:SetText(minutes .. ":" .. seconds)
                             else
                                 _G[k .. "CooldownText"]:SetText(seconds)
@@ -791,7 +870,6 @@ function ArchiTotem_OnUpdate(arg1)
             end
         end
 
-        this.TimeSinceLastUpdate = 0
     end
 end
 
@@ -806,7 +884,15 @@ function ArchiTotem_Command(cmd)
         table.insert(arg, token)
     end
 
-    if arg[1] == "set" then
+    if arg[1] == "set" and not tonumber(arg[3] or "") then
+        ArchiTotem_Print(L["/at set <earth/fire/water/air> # - Sets the totems shown of that element to #."], "error")
+    elseif arg[1] == "resetpos" then
+        ArchiTotem_Options["Apperance"].posX = GetScreenWidth() / 2
+        ArchiTotem_Options["Apperance"].posY = GetScreenHeight() / 2
+        ArchiTotemFrame:ClearAllPoints()
+        ArchiTotemFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", ArchiTotem_Options["Apperance"].posX, ArchiTotem_Options["Apperance"].posY)
+        ArchiTotem_Print("Bar moved to the centre of the screen.")
+    elseif arg[1] == "set" then
         if arg[2] == "earth" then
             if tonumber(arg[3]) > 0 and tonumber(arg[3]) <= 5 then
                 ArchiTotem_Options["Ear"].shown = tonumber(arg[3])
@@ -898,6 +984,7 @@ function ArchiTotem_Command(cmd)
         ArchiTotem_Print(L["/at timers - Toggles showing timers"])
         ArchiTotem_Print(L["/at tooltip - Toggles showing tooltips"])
         ArchiTotem_Print(L["/at debug - Toggles debuging"])
+        ArchiTotem_Print("/at resetpos - Moves the bar to the centre of the screen")
         DEFAULT_CHAT_FRAME:AddMessage("\n")
         ArchiTotem_Print(L["Moving the bar:"])
         ArchiTotem_Print(L["Ctrl-RightClick and Drag any of the main buttons"])
@@ -915,7 +1002,6 @@ end
 local ArchiTotemMinimapButton = nil
 local ArchiTotemConfigFrame = nil
 local configWidgets = {}
-local ArchiTotemMinimapPlace = nil   -- exposed for /at reset
 local ARCHITOTEM_MM_ICON = "Interface\\AddOns\\ArchiTotem\\ArchiTotem"
 local ARCHITOTEM_MM_SIZE = 31
 
@@ -1013,7 +1099,8 @@ function ArchiTotem_CreateMinimapButton()
     end)
 
     -- ---- Click
-    mm:SetScript("OnClick", function(self, btn)
+    mm:SetScript("OnClick", function()
+        local btn = arg1 -- 1.12 passes the mouse button in arg1, not as a parameter
         if moved then moved = false; return end
 
         -- Ctrl+RightClick = reset position
@@ -1038,8 +1125,8 @@ function ArchiTotem_CreateMinimapButton()
     end)
 
     -- ---- Tooltip
-    mm:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self or mm, "ANCHOR_LEFT")
+    mm:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(mm, "ANCHOR_LEFT")
         GameTooltip:SetText("ArchiTotem Settings", 1, 1, 1)
         GameTooltip:AddLine("Left-click to open the settings.", 1, 0.82, 0)
         GameTooltip:AddLine("Drag to move the icon around the minimap.", 1, 0.82, 0)
@@ -1062,6 +1149,31 @@ function ArchiTotem_ShowConfigPanel()
     end
     ArchiTotem_UpdateConfigDisplay()
     ArchiTotemConfigFrame:Show()
+end
+
+-- checkbox from a plain Button + textures: the Emberveil client's CheckButton
+-- lacks SetCheckedTexture, so templates/CheckButton methods are not used
+function ArchiTotem_CreateCheck(parent)
+    local cb = CreateFrame("Button", nil, parent)
+    cb:SetWidth(24)
+    cb:SetHeight(24)
+    cb.box = cb:CreateTexture(nil, "ARTWORK")
+    cb.box:SetAllPoints(cb)
+    cb.box:SetTexture("Interface\\Buttons\\UI-CheckBox-Up")
+    cb.mark = cb:CreateTexture(nil, "OVERLAY")
+    cb.mark:SetAllPoints(cb)
+    cb.mark:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    cb.mark:Hide()
+    local hl = cb:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints(cb)
+    hl:SetTexture("Interface\\Buttons\\UI-CheckBox-Highlight")
+    hl:SetBlendMode("ADD")
+    cb.SetChecked = function(self, checked)
+        self.checked = checked and 1 or nil
+        if self.checked then self.mark:Show() else self.mark:Hide() end
+    end
+    cb.GetChecked = function(self) return self.checked end
+    return cb
 end
 
 function ArchiTotem_CreateConfigPanel()
@@ -1139,9 +1251,7 @@ function ArchiTotem_CreateConfigPanel()
         label:SetTextColor(1, 0.82, 0)
         label:SetJustifyH("LEFT")
 
-        local btn = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
-        btn:SetWidth(24)
-        btn:SetHeight(24)
+        local btn = ArchiTotem_CreateCheck(row)
         btn:SetPoint("LEFT", 5, 0)
         btn:SetScript("OnClick", onClickFunc)
 
@@ -1267,12 +1377,11 @@ function ArchiTotem_CreateConfigPanel()
     yPos = yPos - 30
 
     -- Short tooltip
-    ArchiTotemShortTipCheck = CreateFrame("CheckButton", "ArchiTotemShortTipCheck", frame, "UICheckButtonTemplate")
-    ArchiTotemShortTipCheck:SetWidth(24)
-    ArchiTotemShortTipCheck:SetHeight(24)
+    ArchiTotemShortTipCheck = ArchiTotem_CreateCheck(frame)
     ArchiTotemShortTipCheck:SetPoint("TOPLEFT", tooltipRow.row, "BOTTOMLEFT", 5, -5)
     ArchiTotemShortTipCheck:SetScript("OnClick", function()
-        ArchiTotem_Options["Apperance"].shortTooltip = ArchiTotemShortTipCheck:GetChecked()
+        ArchiTotemShortTipCheck:SetChecked(not ArchiTotemShortTipCheck:GetChecked())
+        ArchiTotem_Options["Apperance"].shortTooltip = ArchiTotemShortTipCheck:GetChecked() and true or false
         ArchiTotem_UpdateConfigDisplay()
     end)
 
@@ -1332,11 +1441,16 @@ function ArchiTotem_CreateConfigPanel()
 end
 
 function ArchiTotem_ChangeCount(element, delta)
-    local maxMap = { Ear = 5, Fir = 5, Wat = 6, Air = 7 }
+    -- at most as many as the shaman knows of that element
+    local names = { Ear = "Earth", Fir = "Fire", Wat = "Water", Air = "Air" }
+    local known = 0
+    for i = 1, ArchiTotem_Options[element].max do
+        if ArchiTotem_TotemData["ArchiTotemButton_" .. names[element] .. i] then known = i end
+    end
     local current = ArchiTotem_Options[element].shown
     local newVal = current + delta
     if newVal < 1 then newVal = 1 end
-    if newVal > maxMap[element] then newVal = maxMap[element] end
+    if newVal > known then newVal = known end
     if newVal ~= current then
         ArchiTotem_Options[element].shown = newVal
         ArchiTotem_UpdateShown()
@@ -1375,4 +1489,18 @@ end
 
 function ArchiTotem_InitMinimapButton()
     ArchiTotem_CreateMinimapButton()
+end
+
+-- re-read the spell book (new totem learned) and keep the player's order
+function ArchiTotem_Rebuild()
+    if not (ArchiTotem_Options and ArchiTotem_TotemData) then return end
+    local saveData = {}
+    for k, v in pairs(ArchiTotem_TotemData) do
+        saveData[k] = { name = v.name }
+    end
+    if next(saveData) then ArchiTotem_Options["TotemOrder"] = saveData end
+    ArchiTotem_InitDefaults()
+    ArchiTotem_UpdateTextures()
+    ArchiTotem_UpdateShown()
+    ArchiTotem_UpdateConfigDisplay()
 end

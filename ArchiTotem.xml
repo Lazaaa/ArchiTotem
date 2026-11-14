@@ -1,6 +1,5 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
 C:\Projects\WoW\Bin\Interface\FrameXML\UI.xsd">
-	<Script file="Localization.lua" />
 	<Script file="ArchiTotem.lua" />
 	
 	<Button name="ArchiTotem_ButtonTemplate" movable="true" virtual="true">
@@ -66,12 +65,17 @@ C:\Projects\WoW\Bin\Interface\FrameXML\UI.xsd">
 				</FontString>
 			</Layer>
 		</Layers>
-		<!-- EZT ADD HOZZÁ: -->
-		<Cooldown name="$parentCooldown" inherits="CooldownFrameTemplate">
-			<Anchors>
-				<Anchor point="CENTER" relativeTo="$parent" relativePoint="CENTER"/>
-			</Anchors>
-		</Cooldown>
+		<!-- 1.12 cooldown swirl: a Model inside <Frames> (as in ActionButtonTemplate) -->
+		<Frames>
+			<Model name="$parentCooldown" inherits="CooldownFrameTemplate">
+				<Size>
+					<AbsDimension x="36" y="36"/>
+				</Size>
+				<Anchors>
+					<Anchor point="CENTER" relativeTo="$parent" relativePoint="CENTER"/>
+				</Anchors>
+			</Model>
+		</Frames>
 		<HighlightTexture alphaMode="ADD" file="Interface\Buttons\ButtonHilight-Square"/>
 	</Button>
 	
